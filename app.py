@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 import requests
 from PIL import Image
 from io import BytesIO
+from dotenv import load_dotenv  # <-- NEW
+load_dotenv() 
 import os
 
 app = Flask(__name__)
