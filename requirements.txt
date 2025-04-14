@@ -1,0 +1,5 @@
+Flask==2.2.3
+transformers==4.25.1
+torch==1.12.1
+Pillow==9.0.1
+werkzeug==2.2.3
