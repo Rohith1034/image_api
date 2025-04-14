@@ -1,46 +1,48 @@
 from flask import Flask, request, jsonify
+import requests
 from PIL import Image
 from io import BytesIO
-import torch
-from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
+import os
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# Load model and processor
-model_name = "nlpconnect/vit-gpt2-image-captioning"
-model = VisionEncoderDecoderModel.from_pretrained(model_name)
-processor = ViTImageProcessor.from_pretrained(model_name)
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+# Read Hugging Face API token from environment variable
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+  # Don't hardcode your token here!
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model.to(device)
+# Hugging Face model URL
+API_URL = "https://api-inference.huggingface.co/models/nlpconnect/vit-gpt2-image-captioning"
+headers = {"Authorization": f"Bearer {HF_API_TOKEN}"} if HF_API_TOKEN else {}
 
-# Generate caption from image
-def generate_caption(image: Image.Image) -> str:
-    pixel_values = processor(images=image, return_tensors="pt").pixel_values.to(device)
-    output_ids = model.generate(pixel_values, max_length=16, num_beams=4)
-    caption = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-    return caption.strip()
-
-# Hello world route
 @app.route("/")
 def home():
     return "Hello, World!"
 
-# Image captioning route
 @app.route("/generate_caption", methods=["POST"])
 def caption_api():
-    if "image" not in request.files:
-        return jsonify({"error": "No image uploaded"}), 400
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image uploaded'}), 400
 
     try:
-        image = Image.open(request.files["image"].stream)
-        caption = generate_caption(image)
-        return jsonify({"caption": caption})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        image = Image.open(request.files['image'].stream).convert("RGB")
+        buffered = BytesIO()
+        image.save(buffered, format="JPEG")
+        image_bytes = buffered.getvalue()
 
-# Run the app
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            data=image_bytes
+        )
+
+        result = response.json()
+        if isinstance(result, list) and "generated_text" in result[0]:
+            return jsonify({"caption": result[0]["generated_text"]})
+        else:
+            return jsonify({"error": "Failed to generate caption", "details": result}), 500
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == "__main__":
     app.run(debug=True)
